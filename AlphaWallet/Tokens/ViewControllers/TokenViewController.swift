@@ -2,6 +2,7 @@
 
 import Foundation
 import UIKit
+import BigInt
 
 protocol TokenViewControllerDelegate: class, CanOpenURL {
     func didTapSend(forTransferType transferType: TransferType, inViewController viewController: TokenViewController)
@@ -23,6 +24,7 @@ class TokenViewController: UIViewController {
     private let transferType: TransferType
     private let tableView = UITableView(frame: .zero, style: .plain)
     private let buttonsBar = ButtonsBar(numberOfButtons: 2)
+    private let filteredActionsMessagesLabel = UILabel()
 
     weak var delegate: TokenViewControllerDelegate?
 
@@ -45,6 +47,9 @@ class TokenViewController: UIViewController {
         tableView.tableHeaderView = header
         tableView.translatesAutoresizingMaskIntoConstraints = false
         roundedBackground.addSubview(tableView)
+
+        filteredActionsMessagesLabel.translatesAutoresizingMaskIntoConstraints = false
+        roundedBackground.addSubview(filteredActionsMessagesLabel)
 
         let footerBar = UIView()
         footerBar.translatesAutoresizingMaskIntoConstraints = false
@@ -70,6 +75,10 @@ class TokenViewController: UIViewController {
             footerBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             footerBar.topAnchor.constraint(equalTo: view.layoutGuide.bottomAnchor, constant: -ButtonsBar.buttonsHeight - ButtonsBar.marginAtBottomScreen),
             footerBar.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            filteredActionsMessagesLabel.leadingAnchor.constraint(equalTo: footerBar.leadingAnchor, constant: 7),
+            filteredActionsMessagesLabel.trailingAnchor.constraint(equalTo: footerBar.trailingAnchor, constant: -7),
+            filteredActionsMessagesLabel.bottomAnchor.constraint(equalTo: footerBar.topAnchor, constant: -7),
 
             roundedBackground.createConstraintsWithContainer(view: view),
         ])
@@ -112,19 +121,36 @@ class TokenViewController: UIViewController {
 
         tableView.tableHeaderView = header
 
+        filteredActionsMessagesLabel.numberOfLines = 0
+        var filteredMessages: [String]
+
         let actions = viewModel.actions
         buttonsBar.numberOfButtons = actions.count
         buttonsBar.configure()
+        filteredMessages = .init()
         for (action, button) in zip(actions, buttonsBar.buttons) {
             button.setTitle(action.name, for: .normal)
             button.addTarget(self, action: #selector(actionButtonTapped), for: .touchUpInside)
             switch session.account.type {
             case .real:
-                button.isEnabled = true
+                if let tokenHolder = generateTokenHolder(), let selection = action.activeExcludingSelection(selectedTokenHolders: [tokenHolder]) {
+                    if selection.denial == nil {
+                        button.isEnabled = false
+                        //TODO Choose between singular or plural when we support multi-selections
+                        filteredMessages.append(selection.names.singular)
+                    } else {
+                        button.isEnabled = true
+                    }
+                } else {
+                    button.isEnabled = true
+                }
             case .watch:
                 button.isEnabled = false
             }
         }
+        filteredActionsMessagesLabel.font = Fonts.regular(size: 20)
+        filteredActionsMessagesLabel.textColor = Colors.appText
+        filteredActionsMessagesLabel.text = Set(filteredMessages).joined(separator: "\n")
 
         tableView.reloadData()
     }
@@ -184,10 +210,36 @@ class TokenViewController: UIViewController {
             case .nftRedeem, .nftSell, .nonFungibleTransfer:
                 break
             case .tokenScript:
-                delegate?.didTap(action: action, transferType: transferType, viewController: self)
+                if let tokenHolder = generateTokenHolder(), let selection = action.activeExcludingSelection(selectedTokenHolders: [tokenHolder]) {
+                    if let denialMessage = selection.denial {
+                        let alertController = UIAlertController.alert(
+                                title: nil,
+                                message: denialMessage,
+                                alertButtonTitles: [R.string.localizable.oK()],
+                                alertButtonStyles: [.default],
+                                viewController: self,
+                                completion: nil
+                        )
+                    } else {
+                        //no-op shouldn't have reached here since the button should be disabled. So just do nothing to be safe
+                    }
+                } else {
+                    delegate?.didTap(action: action, transferType: transferType, viewController: self)
+                }
             }
             break
         }
+    }
+
+    private func generateTokenHolder() -> TokenHolder? {
+        //TODO id 1 for fungibles. Might come back to bite us?
+        let hardcodedTokenIdForFungibles = BigUInt(1)
+        guard let tokenObject = viewModel?.token else {return nil }
+        let xmlHandler = XMLHandler(contract: tokenObject.contractAddress, assetDefinitionStore: assetDefinitionStore)
+        //TODO Event support, if/when designed for fungibles
+        let values = xmlHandler.resolveAttributesBypassingCache(withTokenIdOrEvent: .tokenId(tokenId: hardcodedTokenIdForFungibles), server: self.session.server, account: self.session.account)
+        let token = Token(tokenIdOrEvent: .tokenId(tokenId: hardcodedTokenIdForFungibles), tokenType: tokenObject.type, index: 0, name: tokenObject.name, symbol: tokenObject.symbol, status: .available, values: values)
+        return TokenHolder(tokens: [token], contractAddress: tokenObject.contractAddress, hasAssetDefinition: true)
     }
 }
 

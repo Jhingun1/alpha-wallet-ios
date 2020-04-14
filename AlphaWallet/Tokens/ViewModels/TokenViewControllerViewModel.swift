@@ -10,7 +10,8 @@ struct TokenViewControllerViewModel {
     private let tokensStore: TokensDataStore
     private let transactionsStore: TransactionsStorage
     private let assetDefinitionStore: AssetDefinitionStore
-    private var token: TokenObject? {
+
+    var token: TokenObject? {
         switch transferType {
         case .nativeCryptocurrency:
             //TODO might as well just make .nativeCryptocurrency hold the TokenObject instance too
