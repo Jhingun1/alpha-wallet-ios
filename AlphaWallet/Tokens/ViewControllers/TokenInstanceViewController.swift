@@ -22,7 +22,6 @@ class TokenInstanceViewController: UIViewController, TokenVerifiableStatusViewCo
     private lazy var tokenRowView: TokenCardRowViewProtocol & UIView = createTokenRowView()
     private let separators = (bar: UIView(), line: UIView())
     private let buttonsBar = ButtonsBar(numberOfButtons: 3)
-    private let filteredActionsMessagesLabel = UILabel()
 
     var tokenHolder: TokenHolder {
         return viewModel.tokenHolder
@@ -78,9 +77,6 @@ class TokenInstanceViewController: UIViewController, TokenVerifiableStatusViewCo
 
         header.delegate = self
 
-        filteredActionsMessagesLabel.translatesAutoresizingMaskIntoConstraints = false
-        roundedBackground.addSubview(filteredActionsMessagesLabel)
-
         let footerBar = UIView()
         footerBar.translatesAutoresizingMaskIntoConstraints = false
         footerBar.backgroundColor = .clear
@@ -107,10 +103,6 @@ class TokenInstanceViewController: UIViewController, TokenVerifiableStatusViewCo
             footerBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             footerBar.topAnchor.constraint(equalTo: view.layoutGuide.bottomAnchor, constant: -ButtonsBar.buttonsHeight - ButtonsBar.marginAtBottomScreen),
             footerBar.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-
-            filteredActionsMessagesLabel.leadingAnchor.constraint(equalTo: footerBar.leadingAnchor, constant: 7),
-            filteredActionsMessagesLabel.trailingAnchor.constraint(equalTo: footerBar.trailingAnchor, constant: -7),
-            filteredActionsMessagesLabel.bottomAnchor.constraint(equalTo: footerBar.topAnchor, constant: -7),
         ] + roundedBackground.createConstraintsWithContainer(view: view))
     }
 
@@ -129,13 +121,9 @@ class TokenInstanceViewController: UIViewController, TokenVerifiableStatusViewCo
 
         header.configure(viewModel: .init(tokenObject: tokenObject, server: tokenObject.server, assetDefinitionStore: assetDefinitionStore))
 
-        filteredActionsMessagesLabel.numberOfLines = 0
-        var filteredMessages: [String]
-
         let actions = viewModel.actions
         buttonsBar.numberOfButtons = actions.count
         buttonsBar.configure()
-        filteredMessages = .init()
         for (action, button) in zip(actions, buttonsBar.buttons) {
             button.setTitle(action.name, for: .normal)
             button.addTarget(self, action: #selector(actionButtonTapped), for: .touchUpInside)
@@ -143,23 +131,17 @@ class TokenInstanceViewController: UIViewController, TokenVerifiableStatusViewCo
             case .real:
                 if let selection = action.activeExcludingSelection(selectedTokenHolders: [tokenHolder]) {
                     if selection.denial == nil {
-                        button.isEnabled = false
-                        //TODO Choose between singular or plural when we support multi-selections
-                        filteredMessages.append(selection.names.singular)
+                        button.isHidden = true
                     } else {
-                        button.isEnabled = true
+                        button.isHidden = false
                     }
                 } else {
-                    button.isEnabled = true
+                    button.isHidden = false
                 }
             case .watch:
                 button.isEnabled = false
             }
         }
-        filteredActionsMessagesLabel.font = Fonts.regular(size: 20)
-        filteredActionsMessagesLabel.textColor = Colors.appText
-        filteredActionsMessagesLabel.text = Set(filteredMessages).joined(separator: "\n")
-
 
         tokenRowView.configure(tokenHolder: tokenHolder, tokenView: .view, areDetailsVisible: tokenHolder.areDetailsVisible, width: 0, assetDefinitionStore: assetDefinitionStore)
     }

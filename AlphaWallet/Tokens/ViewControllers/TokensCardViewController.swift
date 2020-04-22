@@ -34,7 +34,6 @@ class TokensCardViewController: UIViewController, TokenVerifiableStatusViewContr
     private let roundedBackground = RoundedBackground()
     private let tableView = UITableView(frame: .zero, style: .plain)
     private let buttonsBar = ButtonsBar(numberOfButtons: 3)
-    private let filteredActionsMessagesLabel = UILabel()
     private var isMultipleSelectionMode = false {
         didSet {
             if isMultipleSelectionMode {
@@ -100,9 +99,6 @@ class TokensCardViewController: UIViewController, TokenVerifiableStatusViewContr
         tableView.estimatedRowHeight = TokensCardViewController.anArbitaryRowHeightSoAutoSizingCellsWorkIniOS10
         roundedBackground.addSubview(tableView)
 
-        filteredActionsMessagesLabel.translatesAutoresizingMaskIntoConstraints = false
-        roundedBackground.addSubview(filteredActionsMessagesLabel)
-
         let footerBar = UIView()
         footerBar.translatesAutoresizingMaskIntoConstraints = false
         footerBar.backgroundColor = .clear
@@ -125,10 +121,6 @@ class TokensCardViewController: UIViewController, TokenVerifiableStatusViewContr
             footerBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             footerBar.topAnchor.constraint(equalTo: view.layoutGuide.bottomAnchor, constant: -ButtonsBar.buttonsHeight - ButtonsBar.marginAtBottomScreen),
             footerBar.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-
-            filteredActionsMessagesLabel.leadingAnchor.constraint(equalTo: footerBar.leadingAnchor, constant: 7),
-            filteredActionsMessagesLabel.trailingAnchor.constraint(equalTo: footerBar.trailingAnchor, constant: -7),
-            filteredActionsMessagesLabel.bottomAnchor.constraint(equalTo: footerBar.topAnchor, constant: -7),
         ] + roundedBackground.createConstraintsWithContainer(view: view))
 
 
@@ -157,14 +149,10 @@ class TokensCardViewController: UIViewController, TokenVerifiableStatusViewContr
         header.layoutIfNeeded()
         tableView.tableHeaderView = header
 
-        filteredActionsMessagesLabel.numberOfLines = 0
-        var filteredMessages: [String]
-
         if let selectedTokenHolder = selectedTokenHolder {
             let actions = viewModel.actions
             buttonsBar.numberOfButtons = actions.count
             buttonsBar.configure()
-            filteredMessages = .init()
             for (action, button) in zip(actions, buttonsBar.buttons) {
                 button.setTitle(action.name, for: .normal)
                 button.addTarget(self, action: #selector(actionButtonTapped), for: .touchUpInside)
@@ -172,26 +160,20 @@ class TokensCardViewController: UIViewController, TokenVerifiableStatusViewContr
                 case .real:
                     if let selection = action.activeExcludingSelection(selectedTokenHolders: [selectedTokenHolder]) {
                         if selection.denial == nil {
-                            button.isEnabled = false
-                            //TODO Choose between singular or plural when we support multi-selections
-                            filteredMessages.append(selection.names.singular)
+                            button.isHidden = true
                         } else {
-                            button.isEnabled = true
+                            button.isHidden = false
                         }
                     } else {
-                        button.isEnabled = true
+                        button.isHidden = false
                     }
                 case .watch:
                     button.isEnabled = false
                 }
             }
         } else {
-            filteredMessages = .init()
             buttonsBar.numberOfButtons = 0
         }
-        filteredActionsMessagesLabel.font = Fonts.regular(size: 20)
-        filteredActionsMessagesLabel.textColor = Colors.appText
-        filteredActionsMessagesLabel.text = Set(filteredMessages).joined(separator: "\n")
 
         sizingCell = nil
         tableView.reloadData()
