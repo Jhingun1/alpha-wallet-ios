@@ -18,6 +18,7 @@ class TokenViewController: UIViewController {
     }()
     lazy private var headerViewModel = SendHeaderViewViewModel(server: session.server)
     private var viewModel: TokenViewControllerViewModel?
+    private var tokenHolder: TokenHolder?
     private let session: WalletSession
     private let tokensDataStore: TokensDataStore
     private let assetDefinitionStore: AssetDefinitionStore
@@ -232,14 +233,34 @@ class TokenViewController: UIViewController {
     }
 
     private func generateTokenHolder() -> TokenHolder? {
+        //TODO is it correct to generate the TokenHolder instance once and never replace it? If not, we have to be very careful with subscriptions. Not re-subscribing in an infinite loop
+        guard tokenHolder == nil else { return tokenHolder }
+
         //TODO id 1 for fungibles. Might come back to bite us?
         let hardcodedTokenIdForFungibles = BigUInt(1)
         guard let tokenObject = viewModel?.token else {return nil }
         let xmlHandler = XMLHandler(contract: tokenObject.contractAddress, assetDefinitionStore: assetDefinitionStore)
         //TODO Event support, if/when designed for fungibles
         let values = xmlHandler.resolveAttributesBypassingCache(withTokenIdOrEvent: .tokenId(tokenId: hardcodedTokenIdForFungibles), server: self.session.server, account: self.session.account)
+        let subscribablesForAttributeValues = values.values
+        let allResolved = subscribablesForAttributeValues.allSatisfy { $0.subscribableValue?.value != nil }
+        if allResolved {
+            //no-op
+        } else {
+            for each in subscribablesForAttributeValues {
+                guard let subscribable = each.subscribableValue else { continue }
+                let subscriptionKey = subscribable.subscribe { [weak self] value in
+                    guard let strongSelf = self else { return }
+                    guard let viewModel = strongSelf.viewModel else { return }
+                    strongSelf.configure(viewModel: viewModel)
+                }
+            }
+        }
+
+
         let token = Token(tokenIdOrEvent: .tokenId(tokenId: hardcodedTokenIdForFungibles), tokenType: tokenObject.type, index: 0, name: tokenObject.name, symbol: tokenObject.symbol, status: .available, values: values)
-        return TokenHolder(tokens: [token], contractAddress: tokenObject.contractAddress, hasAssetDefinition: true)
+        tokenHolder = TokenHolder(tokens: [token], contractAddress: tokenObject.contractAddress, hasAssetDefinition: true)
+        return tokenHolder
     }
 }
 
